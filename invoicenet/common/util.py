@@ -33,8 +33,8 @@ from googleapiclient.discovery import build
 import base64
 from google.cloud import vision
 
-## API keys for google ocr
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="google_api_keys.json"
+# API keys for google ocr
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="anonymization.json"
 
 
 class TextParser:

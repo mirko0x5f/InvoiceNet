@@ -21,7 +21,10 @@
 import argparse
 import glob
 import os
+import logging
+import magic
 import pdf2image
+from PIL import Image
 import simplejson
 import tqdm
 import multiprocessing as mp
@@ -30,9 +33,20 @@ from invoicenet import FIELDS, FIELD_TYPES
 from invoicenet.common import util
 
 
+logger = logging.getLogger(__name__)
+
+
 def process_file(filename, out_dir, phase, ocr_engine):
     try:
-        page = pdf2image.convert_from_path(filename)[0]
+        filetype = magic.from_file(filename, mime=True)
+        logger.info(f"Filetype found: '{filetype}'")
+        if filetype == "application/pdf":
+            page = pdf2image.convert_from_path(filename)[0]
+        elif filetype in ("image/jpeg" or "image/jpg" or "image/png"):
+            page = Image.open(filename)
+        else:
+            raise Exception(f"Can't process file, unrecognized file type '{filetype}'")
+
         page.save(os.path.join(out_dir, phase, os.path.basename(filename)[:-3] + 'png'))
 
         height = page.size[1]
@@ -60,16 +74,17 @@ def process_file(filename, out_dir, phase, ocr_engine):
             else:
                 fields[field] = ''
 
+        file_name_no_extension = ".".join(os.path.basename(filename).split(".")[:-1])
         data = {
             "fields": fields,
             "nGrams": ngrams,
             "height": height,
             "width": width,
             "filename": os.path.abspath(
-                os.path.join(out_dir, phase, os.path.basename(filename)[:-3] + 'png'))
+                os.path.join(out_dir, phase, file_name_no_extension + '.png'))
         }
 
-        with open(os.path.join(out_dir, phase, os.path.basename(filename)[:-3] + 'json'), 'w') as fp:
+        with open(os.path.join(out_dir, phase, file_name_no_extension + '.json'), 'w') as fp:
             fp.write(simplejson.dumps(data, indent=2))
         return True
 
@@ -97,7 +112,7 @@ def main():
     os.makedirs(os.path.join(args.out_dir, 'train'), exist_ok=True)
     os.makedirs(os.path.join(args.out_dir, 'val'), exist_ok=True)
 
-    filenames = [os.path.abspath(f) for f in glob.glob(args.data_dir + "**/*.pdf", recursive=True)]
+    filenames = [os.path.abspath(f) for e in (".pdf", ".png", ".jpeg", ".jpg") for f in glob.glob(args.data_dir + f"**/*{e}", recursive=True) ]
 
     idx = int(len(filenames) * args.val_size)
     train_files = filenames[idx:]

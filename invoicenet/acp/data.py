@@ -25,6 +25,8 @@ import hashlib
 import json
 import random
 import string
+import logging
+import magic
 import pdf2image
 
 import numpy as np
@@ -37,6 +39,8 @@ from ..common import util
 from ..common.data import Data, UnkDict
 
 random.seed(0)
+
+logger = logging.getLogger(__name__)
 
 
 class InvoiceData(Data):
@@ -240,8 +244,16 @@ class InvoiceData(Data):
                 print("Exception: {} : {}".format(doc_id, exp))
                 exceptions += 1
 
-    def _process_pdf(self, path):
-        pixels = pdf2image.convert_from_path(path)[0]
+    def _process_image(self, path):
+        filetype = magic.from_file(path, mime=True)
+        logger.info(f"Filetype found: '{filetype}'")
+        if filetype == "application/pdf":
+            pixels = pdf2image.convert_from_path(path)[0]
+        elif filetype in ("image/jpeg" or "image/jpg" or "image/png"):
+            pixels = Image.open(path)
+        else:
+            raise Exception(f"Can't process file, unrecognized file type '{filetype}'")
+
         height = pixels.size[1]
         width = pixels.size[0]
 
@@ -278,7 +290,7 @@ class InvoiceData(Data):
             exceptions = 0
             for idx, path in enumerate(paths):
                 try:
-                    yield self._process_pdf(path)
+                    yield self._process_image(path)
                 except Exception as exp:
                     print("Exception: {} : {}".format(path, exp))
                     exceptions += 1

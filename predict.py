@@ -49,9 +49,9 @@ def main():
         if not os.path.exists(args.invoice):
             print("ERROR: Could not find file '{}'".format(args.invoice))
             return
-        if not args.invoice.endswith('.pdf'):
-            print("ERROR: '{}' is not a PDF file".format(args.invoice))
-            return
+        # if not args.invoice.endswith('.pdf'):
+        #     print("ERROR: '{}' is not a PDF file".format(args.invoice))
+        #     return
         paths.append(args.invoice)
     else:
         paths = [os.path.abspath(f) for f in glob.glob(args.data_dir + "**/*.pdf", recursive=True)]

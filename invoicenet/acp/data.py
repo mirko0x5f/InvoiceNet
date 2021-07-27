@@ -246,10 +246,9 @@ class InvoiceData(Data):
 
     def _process_image(self, path):
         filetype = magic.from_file(path, mime=True)
-        logger.info(f"Filetype found: '{filetype}'")
         if filetype == "application/pdf":
             pixels = pdf2image.convert_from_path(path)[0]
-        elif filetype in ("image/jpeg" or "image/jpg" or "image/png"):
+        elif filetype in ("image/jpeg", "image/jpg", "image/png"):
             pixels = Image.open(path)
         else:
             raise Exception(f"Can't process file, unrecognized file type '{filetype}'")

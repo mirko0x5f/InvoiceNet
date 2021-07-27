@@ -54,7 +54,7 @@ def main():
         #     return
         paths.append(args.invoice)
     else:
-        paths = [os.path.abspath(f) for f in glob.glob(args.data_dir + "**/*.pdf", recursive=True)]
+        paths = [os.path.abspath(f) for f in glob.glob(args.data_dir + "**/*.png", recursive=True)]
 
     if not os.path.exists('./models/invoicenet/'):
         print("Could not find any trained models!")

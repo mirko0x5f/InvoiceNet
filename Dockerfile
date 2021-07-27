@@ -18,5 +18,5 @@ RUN pip install .
 
 COPY / /app
 
-RUN python prepare_data.py --data_dir train_data/
-RUN python train.py --field label --batch_size 1 --steps 10
+# RUN python prepare_data.py --data_dir train_data/
+# RUN python train.py --field label --batch_size 1 --steps 10

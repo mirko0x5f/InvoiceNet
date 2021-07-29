@@ -22,6 +22,7 @@ import argparse
 import glob
 import os
 import logging
+import traceback
 import magic
 import pdf2image
 from PIL import Image
@@ -36,7 +37,7 @@ from invoicenet.common import util
 logger = logging.getLogger(__name__)
 
 
-def process_file(filename, out_dir, phase, ocr_engine):
+def process_file(filename, out_dir, phase, desired_img_w=128, desired_img_h=128):
     try:
         filetype = magic.from_file(filename, mime=True)
         if filetype == "application/pdf":
@@ -46,15 +47,19 @@ def process_file(filename, out_dir, phase, ocr_engine):
         else:
             raise Exception(f"Can't process file, unrecognized file type '{filetype}'")
 
-        page.save(os.path.join(out_dir, phase, os.path.basename(filename)[:-3] + 'png'))
-        height = page.size[1]
-        width = page.size[0]
-        ngrams = util.create_ngrams(page, height=height, width=width, ocr_engine="google_ocr")
+        output_h_perc = page.size[1] / desired_img_h
+        output_w_perc = page.size[0] / desired_img_h
+        # print(f"resizing, orig_size = {page.size[1]} desired size = {desired_img_h} perc = {output_h_perc}")
+        # print(f"resizing, orig_size = {page.size[0]} desired size = {desired_img_w} perc = {output_w_perc}")
+        ngrams = util.create_ngrams(page, output_h_perc, output_w_perc)
         for ngram in ngrams:
             if "amount" in ngram["parses"]:
                 ngram["parses"]["amount"] = util.normalize(ngram["parses"]["amount"], key="amount")
             if "date" in ngram["parses"]:
                 ngram["parses"]["date"] = util.normalize(ngram["parses"]["date"], key="date")
+
+        page.resize((desired_img_w, desired_img_h))
+        page.save(os.path.join(out_dir, phase, os.path.basename(filename)[:-3] + 'jpg'))
 
         with open(filename[:-3] + 'json', 'r') as fp:
             labels = simplejson.loads(fp.read())
@@ -74,10 +79,10 @@ def process_file(filename, out_dir, phase, ocr_engine):
         data = {
             "fields": fields,
             "nGrams": ngrams,
-            "height": height,
-            "width": width,
+            "height": desired_img_h,
+            "width": desired_img_w,
             "filename": os.path.abspath(
-                os.path.join(out_dir, phase, file_name_no_extension + '.png'))
+                os.path.join(out_dir, phase, file_name_no_extension + '.jpg'))
         }
         with open(os.path.join(out_dir, phase, file_name_no_extension + '.json'), 'w') as fp:
             fp.write(simplejson.dumps(data, indent=2))
@@ -85,6 +90,7 @@ def process_file(filename, out_dir, phase, ocr_engine):
 
     except Exception as exp:
         print("Skipping {} : {}".format(filename, exp))
+        traceback.print_exc()
         return False
 
 
@@ -104,24 +110,28 @@ def main():
 
     args = ap.parse_args()
 
+    os.makedirs(os.path.join(args.out_dir, 'test'), exist_ok=True)
     os.makedirs(os.path.join(args.out_dir, 'train'), exist_ok=True)
     os.makedirs(os.path.join(args.out_dir, 'val'), exist_ok=True)
 
     filenames = [os.path.abspath(f) for e in (".pdf", ".png", ".jpeg", ".jpg") for f in glob.glob(args.data_dir + f"**/*{e}", recursive=True) ]
-    idx = int(len(filenames) * args.val_size)
-    train_files = filenames[idx:]
-    val_files = filenames[:idx]
+    test_files_idx = int(len(filenames) * 0.05)
+    test_files = filenames[:test_files_idx]
+    filenames = filenames[test_files_idx:]
+    val_files_idx = int(len(filenames) * args.val_size)
+    train_files = filenames[val_files_idx:]
+    val_files = filenames[:val_files_idx]
     print("Total: {}".format(len(filenames)))
     print("Training: {}".format(len(train_files)))
     print("Validation: {}".format(len(val_files)))
 
-    for phase, filenames in [('train', train_files), ('val', val_files)]:
+    for phase, filenames in [('train', train_files), ('val', val_files), ('test', test_files)]:
         print("Preparing {} data...".format(phase))
 
         with tqdm.tqdm(total=len(filenames)) as pbar:
             pool = mp.Pool(args.cores)
             for filename in filenames:
-                pool.apply_async(process_file, args=(filename, args.out_dir, phase, args.ocr_engine),
+                pool.apply_async(process_file, args=(filename, args.out_dir, phase, 128, 128),
                                  callback=lambda _: pbar.update())
 
             pool.close()

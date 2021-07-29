@@ -23,6 +23,7 @@ import glob
 import json
 import argparse
 
+from tqdm import tqdm
 from invoicenet import FIELDS
 from invoicenet.acp.acp import AttendCopyParse
 
@@ -54,7 +55,7 @@ def main():
         #     return
         paths.append(args.invoice)
     else:
-        paths = [os.path.abspath(f) for f in glob.glob(args.data_dir + "**/*.png", recursive=True)]
+        paths = [os.path.abspath(f) for f in glob.glob(args.data_dir + "**/*.jpg", recursive=True)]
 
     if not os.path.exists('./models/invoicenet/'):
         print("Could not find any trained models!")
@@ -67,11 +68,14 @@ def main():
             else:
                 print("Could not find a trained model for field '{}', skipping...".format(field))
 
-    for field in fields:
+    for field in tqdm(fields):
         print("\nExtracting field '{}' from {} invoices...\n".format(field, len(paths)))
         model = AttendCopyParse(field=field, restore=True)
         predictions[field] = model.predict(paths=paths)
 
+    totals = 0
+    correct = 0
+        
     os.makedirs(args.pred_dir, exist_ok=True)
     for idx, filename in enumerate(paths):
         filename = os.path.basename(filename)[:-3] + 'json'
@@ -86,11 +90,22 @@ def main():
             print("\nFilename: {}".format(filename))
             for field in predictions.keys():
                 labels[field] = predictions[field][idx]
+                totals += 1
+                with open("processed_data/test/" + filename, "r") as original_json_fp:
+                    original_json = json.load(original_json_fp)
+                    orig_label = original_json["fields"]["label"]
+                    pred_label = predictions[field][idx]
+                    if orig_label.lower() == pred_label.lower():
+                        correct += 1
+                        print(f"{orig_label.lower()} == {pred_label.lower()}!")
+                    else:
+                        print(f"ERROR: {orig_label.lower()} != {pred_label.lower()}")
                 print("  {}: {}".format(field, labels[field]))
             fp.write(json.dumps(labels, indent=2))
             print('\n')
 
     print("Predictions stored in '{}'".format(args.pred_dir))
+    print(f"TOTAL PREDICTIONS = {totals} CORRECT = {correct}, {(correct/totals)*100}%")
 
 
 if __name__ == '__main__':
